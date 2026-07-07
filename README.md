@@ -13,7 +13,7 @@
 
 | 阶段 | 目录 | 内容 | 状态 |
 |------|------|------|------|
-| 🏗️ Phase 1 | `phase1-robot-system/` | 认识机器人系统 — 阅读《Robotics: Modelling, Planning and Control》 | 🔴 待开始 |
+| 🏗️ Phase 1 | `phase1-robot-system/` | 认识机器人系统 — 阅读《Robotics: Modelling, Planning and Control》 | 🟢 已完成 |
 | 🧠 Phase 2 | `phase2-algorithm-basics/` | 算法基础 — 深度学习概念 + 论文阅读 + 模型对比实验 | 🔴 待开始 |
 | 📖 Phase 3 | `phase3-vla-survey/` | VLA 综述 — 综述论文阅读 + 介绍 PPT | 🔴 待开始 |
 | 🦾 Phase 4 | `phase4-act-reproduction/` | ACT 复现 — ACT 论文 + ALOHA + 仿真环境 | 🔴 待开始 |
