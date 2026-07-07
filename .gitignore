@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Model checkpoints
+*.ckpt
+*.pth
+*.pt
+checkpoints/
+
+# Simulation outputs
+*.mp4
+*.gif
+*.log
+
+# Large files (datasets, models)
+data/
+models/
