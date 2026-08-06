@@ -74,8 +74,8 @@ def render_frame(env, camera_name="agentview", height=256, width=256):
         return env.env.sim.render(camera_name=camera_name, height=height, width=width)
 
 
-def run_episode(env, task, policy, video_writer, max_steps, action_scale):
-    """跑一个 episode，返回是否成功"""
+def run_episode(env, task, policy, max_steps, action_scale):
+    """跑一个 episode，返回 (是否成功, 视频帧列表)"""
     obs = env.reset()
     task_desc = task.language_instruction
     print(f"  指令: {task_desc}")
@@ -110,15 +110,8 @@ def run_episode(env, task, policy, video_writer, max_steps, action_scale):
         if done:
             break
 
-    # 保存视频
-    if video_frames and video_writer is not None:
-        from PIL import Image
-        video_writer.extend([Image.fromarray(f) for f in video_frames])
-        video_writer.save()
-        print(f"  [视频] 已保存 {len(video_frames)} 帧")
-
     success = bool(info.get("success", False))
-    return success
+    return success, video_frames
 
 
 def main():
@@ -139,24 +132,30 @@ def main():
     )
     print("[模型] 加载完成")
 
-    # 视频输出
+    # 视频输出（每个 episode 一个视频）
     os.makedirs(args.video_dir, exist_ok=True)
-    from PIL import Image
     import imageio.v2 as iio
-    video_path = os.path.join(args.video_dir, f"{args.benchmark}_task{args.task_idx}.gif")
-    writer = iio.get_writer(video_path, fps=10)
 
     # 评估 N 个 episodes
     success_count = 0
     for ep in range(args.num_episodes):
         print(f"\n=== Episode {ep + 1}/{args.num_episodes} ===")
-        ok = run_episode(env, task, policy, writer, args.max_steps, args.action_scale)
+        ok, frames = run_episode(env, task, policy, args.max_steps, args.action_scale)
         success_count += ok
-        print(f"  -> {'✅ 成功' if ok else '❌ 失败'}")
+        print(f"  -> {'✅ 成功' if ok else '❌ 失败'} ({len(frames)} 帧)")
 
-    writer.close()
+        # 保存该 episode 的视频（imageio: append_data 逐帧写入）
+        if frames:
+            video_path = os.path.join(
+                args.video_dir, f"{args.benchmark}_task{args.task_idx}_ep{ep}.mp4")
+            writer = iio.get_writer(video_path, fps=10)
+            for f in frames:
+                writer.append_data(f)
+            writer.close()
+            print(f"  [视频] {video_path}")
+
     print(f"\n[结果] 成功率: {success_count}/{args.num_episodes} = {success_count / args.num_episodes:.0%}")
-    print(f"[结果] 视频: {video_path}")
+    print(f"[结果] 视频目录: {os.path.abspath(args.video_dir)}")
 
 
 if __name__ == "__main__":

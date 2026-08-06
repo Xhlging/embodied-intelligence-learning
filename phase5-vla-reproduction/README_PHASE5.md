@@ -20,12 +20,14 @@ cd embodied-intelligence-learning
 ```powershell
 conda create -n mole python=3.10 -y
 conda activate mole
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pillow numpy opencv-python einops transforms3d
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple imageio imageio-ffmpeg matplotlib
 ```
 
-✅ 验证：`python -c "import torch; print(torch.__version__, torch.cuda.is_available())"` → `2.x.x True`
+> ⚠️ **torch 必须 2.5.1**（MoLe-VLA 官方 environment.yml 的版本，与 transformers 4.40.1 匹配验证过）。不要装 2.13！RTX 5880 Ada 支持 cu121。
+
+✅ 验证：`python -c "import torch; print(torch.__version__, torch.cuda.is_available())"` → `2.5.1+cu121 True`
 
 ## 第 2 步：安装 LIBERO（15 分钟）
 
@@ -50,10 +52,14 @@ xcopy /E /I prismatic_new prismatic
 
 # ② 直接装依赖（仓库无 setup 文件，是纯源码运行，不要 pip install -e .）
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple transformers==4.40.1 sentencepiece==0.1.99 timm==0.9.10 tokenizers==0.19.1 peft==0.11.1 accelerate draccus einops json-numpy jsonlines rich protobuf wandb
+
+# ③ 训练链依赖（import 链必需，装真包避免报错）
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple tensorflow==2.15.0 tensorflow_datasets==4.9.3
+pip install "git+https://ghfast.top/https://github.com/kvablack/dlimp.git"
 ```
 
 > ⚠️ `transformers==4.40.1` 是硬 pin（代码依赖其 API），不要升级
-> tensorflow 2.15 仅训练/RLBench 数据需要，推理可跳过
+> ③ 里的 tensorflow/dlimp 推理时不会被调用，但 `import vla` 的链条会检查——必须装上
 
 ✅ 验证：`python -c "from vla import load_vla; print('VLA import OK')"`
 
