@@ -30,7 +30,11 @@ import numpy as np
 from unittest.mock import MagicMock  # noqa: E402
 
 for _mod in ("tensorflow", "tensorflow_datasets", "dlimp"):
-    sys.modules[_mod] = MagicMock()
+    _m = MagicMock()
+    # MagicMock 的 __getattr__ 不处理 dunder（如 __spec__），transformers 的
+    # importlib.util.find_spec 会检查 __spec__ —— 必须显式赋值
+    _m.__spec__ = types.SimpleNamespace(name=_mod)
+    sys.modules[_mod] = _m
 
 # ============ 权重加载（MoLe-VLA 机制）============
 # MoLe-VLA 仓库要求 TRAIN_ROUTE 环境变量来选择 MoLe 模型加载路径
