@@ -17,24 +17,9 @@ MoLe-VLA / CogACT 在 LIBERO 仿真环境上的推理评估脚本（Phase 5）
 import argparse
 import os
 import sys
-import types
 from pathlib import Path
 
 import numpy as np
-
-# ============ Windows 兼容: stub tensorflow 训练链 ============
-# 推理只用 CogACT (PyTorch)，tensorflow/tfds/dlimp 是 openvla 训练链的依赖。
-# tensorflow_datasets 在 Windows import 必炸（core/shuffle.py import 'resource'，
-# Unix-only 标准库）；且 openvla 代码在函数签名注解里用 tf.Tensor（定义时求值）。
-# 用 MagicMock stub —— 任何属性访问/调用都返回占位对象，推理不调用它们。
-from unittest.mock import MagicMock  # noqa: E402
-
-for _mod in ("tensorflow", "tensorflow_datasets", "dlimp"):
-    _m = MagicMock()
-    # MagicMock 的 __getattr__ 不处理 dunder（如 __spec__），transformers 的
-    # importlib.util.find_spec 会检查 __spec__ —— 必须显式赋值
-    _m.__spec__ = types.SimpleNamespace(name=_mod)
-    sys.modules[_mod] = _m
 
 # ============ 权重加载（MoLe-VLA 机制）============
 # MoLe-VLA 仓库要求 TRAIN_ROUTE 环境变量来选择 MoLe 模型加载路径

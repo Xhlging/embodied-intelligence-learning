@@ -1,112 +1,97 @@
-# Phase 5 图书馆机器操作手册（Windows + RTX 5880 Ada 48GB）
+# Phase 5 操作手册（WSL2 + RTX 5880 Ada 48GB）
 
 > 目标：MoLe-VLA / CogACT 在 LIBERO 仿真上完成推理，产出视频
-> 时间预算：3 小时。按顺序执行，每步有验证点。
+> 环境：图书馆机器 WSL2（Linux）+ 官方 environment.yml 完整依赖
+> 时间预算：3 小时
 
-## 第 0 步：拉取代码（5 分钟）
+## 第 0 步：确认 WSL2 GPU（1 分钟）
 
-```powershell
+```bash
+nvidia-smi
+# 应显示 RTX 5880 Ada（WSL2 GPU 直通）
+```
+
+## 第 1 步：拉代码 + 装 Miniconda（10 分钟）
+
+```bash
+cd ~
 git clone https://github.com/Xhlging/embodied-intelligence-learning.git
 cd embodied-intelligence-learning
+
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
+source $HOME/miniconda3/bin/activate
 ```
 
-✅ 验证：`ls phase5-vla-reproduction/code/` 能看到 `lib_libero_eval.py` 和 `MoLe-VLA-Pytorch/`
+## 第 2 步：创建官方环境（15 分钟）
 
-## 第 1 步：安装 Miniconda + 创建环境（15 分钟）
+```bash
+cd phase5-vla-reproduction/code/MoLe-VLA-Pytorch
 
-1. 安装 [Miniconda Windows x86_64](https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe)（一路默认）
-2. 打开 **Anaconda Prompt**，执行：
+# ① prismatic 复制（官方结构，代码 import prismatic.*）
+cp -r prismatic_new prismatic
 
-```powershell
-conda create -n mole python=3.10 -y
-conda activate mole
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pillow numpy opencv-python einops transforms3d
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple imageio imageio-ffmpeg matplotlib
-```
+# ② 创建 python 3.10 环境
+conda create -n cogact python=3.10 -y
+conda activate cogact
 
-> ⚠️ **torch 必须 2.5.1**（MoLe-VLA 官方 environment.yml 的版本，与 transformers 4.40.1 匹配验证过）。不要装 2.13！RTX 5880 Ada 支持 cu121。
+# ③ 官方依赖清单（Linux 完整版）
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r ../../requirements_linux.txt
 
-✅ 验证：`python -c "import torch; print(torch.__version__, torch.cuda.is_available())"` → `2.5.1+cu121 True`
-
-## 第 2 步：安装 LIBERO（15 分钟）
-
-```powershell
-cd phase5-vla-reproduction/code
-git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git
-cd LIBERO
-pip install -e .
-```
-
-> 如果 LIBERO 要求 robosuite，执行 `pip install robosuite==1.4.0`（LIBERO 官方配套版本）
-
-✅ 验证：`python -c "from libero.libero import benchmark; print('LIBERO OK')"`
-
-## 第 3 步：安装 MoLe-VLA 代码依赖（10 分钟）
-
-```powershell
-cd ..\MoLe-VLA-Pytorch
-
-# ① 关键：prismatic_new 复制为 prismatic（代码 import 的是 prismatic，仓库只带 prismatic_new）
-xcopy /E /I prismatic_new prismatic
-
-# ② 直接装依赖（仓库无 setup 文件，是纯源码运行，不要 pip install -e .）
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple transformers==4.40.1 sentencepiece==0.1.99 timm==0.9.10 tokenizers==0.19.1 peft==0.11.1 accelerate draccus einops json-numpy jsonlines rich protobuf wandb
-
-# ③ 训练链依赖（import 链必需，装真包避免报错）
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple tensorflow==2.15.0 tensorflow_datasets==4.9.3
+# ④ dlimp（不在 PyPI，GitHub 安装）
 pip install "git+https://ghfast.top/https://github.com/kvablack/dlimp.git"
+
+# ⑤ torch GPU 版（官方 pin 2.5.1 + cu121）
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 ```
 
-> ⚠️ `transformers==4.40.1` 是硬 pin（代码依赖其 API），不要升级
-> ③ 里的 tensorflow/dlimp 推理时不会被调用，但 `import vla` 的链条会检查——必须装上
+## 第 3 步：验证（2 分钟）
 
-✅ 验证：`python -c "from vla import load_vla; print('VLA import OK')"`
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+# 期望: 2.5.1+cu121 True
 
-## 第 4 步：下载权重（30-60 分钟，可提前开始！）
-
-**下载 CogACT-Base（30GB，MoLe-VLA 的 backbone）**：
-
-```powershell
-pip install -U "huggingface-hub>=0.24"
-huggingface-cli download CogACT/CogACT-Base --local-dir D:\models\CogACT-Base
+python -c "from vla import load_vla; print('VLA import OK')"
+# 期望: 无报错
 ```
 
-> 如果 huggingface.co 慢：设置 `$env:HF_ENDPOINT="https://hf-mirror.com"` 再执行
-> 权重保存到 `D:\models\CogACT-Base`（本地路径，脚本用 `--ckpt D:\models\CogACT-Base` 加载）
+## 第 4 步：下载权重（30-60 分钟，后台跑）
 
-✅ 验证：`D:\models\CogACT-Base\checkpoints\CogACT-Base.pt` 存在（约 30GB）
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+huggingface-cli download CogACT/CogACT-Base --local-dir ~/models/CogACT-Base
+# 验证: ls ~/models/CogACT-Base/checkpoints/
+```
 
-## 第 5 步：生成 LIBERO 演示数据（5 分钟，可选但推荐）
+## 第 5 步：生成 LIBERO 演示数据（可选）
 
-```powershell
-cd ..\LIBERO
+```bash
+cd ~/embodied-intelligence-learning/phase5-vla-reproduction/code/LIBERO  # 若已克隆
 python scripts/collect_demonstrations.py --task-name libero_spatial --num-episodes 10
 ```
 
-> 生成在 `LIBERO/datasets/` 下。不做也行——直接推理。
-
 ## 第 6 步：推理 + 录视频（30 分钟）
 
-```powershell
-cd ..\..\code
-conda activate mole
-python lib_libero_eval.py --ckpt D:\models\CogACT-Base --action-model DiT-B --benchmark libero_spatial --task-idx 0 --num-episodes 5
+```bash
+cd ~/embodied-intelligence-learning/phase5-vla-reproduction/code
+python lib_libero_eval.py --ckpt ~/models/CogACT-Base --action-model DiT-B \
+  --benchmark libero_spatial --task-idx 0 --num-episodes 5
 ```
 
-✅ 验证：`phase5-vla-reproduction/output/` 出现 `libero_spatial_task0.gif`
+✅ 验证：`output/` 目录出现 `libero_spatial_task0_ep*.mp4`
 
-### 如果机器人不动或乱动（动作尺度不匹配）
+### 动作尺度调参（机器人不动/乱动时）
 
 | 现象 | 调整 |
 |------|------|
-| 机器人完全不动 | `--action-scale 1.0` 或 `2.0` |
-| 机器人乱飞/抖动 | `--action-scale 0.2` 或 `0.1` |
-| 换 policy_setup | `--policy-setup widowx_bridge`（bridge 数据训练更接近桌面操作） |
+| 完全不动 | `--action-scale 1.0` 或 `2.0` |
+| 乱飞/抖动 | `--action-scale 0.2` 或 `0.1` |
+| 换策略配置 | `--policy-setup widowx_bridge` |
 
 ## 第 7 步：回传结果
 
-```powershell
+```bash
+cd ~/embodied-intelligence-learning
 git add phase5-vla-reproduction/output/
 git commit -m "Phase 5: LIBERO 推理视频"
 git push
@@ -116,7 +101,7 @@ git push
 
 | 问题 | 解决 |
 |------|------|
-| `OffScreenRenderEnv` 失败（OSMesa 不支持 Windows） | 脚本已自动回退 `RobosuiteEnv`（弹窗渲染，有显示器即可） |
-| CUDA 版本不对 | RTX 5880 Ada 是 Ada 架构，cu121 驱动 >= 525 即可 |
-| 显存 OOM | 48GB 足够 7B bf16，若仍 OOM 加 `--action-model DiT-S` |
-| LIBERO 安装报 robosuite 版本冲突 | `pip install robosuite==1.4.0` |
+| `import vla` 报错 | 确认执行了第 2 步 ①②（prismatic 复制 + 依赖） |
+| 显存 OOM | 48GB 足够 7B bf16，若仍 OOM 换 `--action-model DiT-S` |
+| LIBERO 安装 | `cd code/LIBERO && pip install -e .`（需先 git clone LIBERO） |
+| 下载慢 | HF_ENDPOINT 已设 hf-mirror；仍慢可用 `aria2c -x16` 多线程 |
