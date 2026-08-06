@@ -2,32 +2,54 @@
 
 ## 快速开始
 
+**所有命令需在 `code/model-comparison/` 目录下运行。**
+
 ```bash
 # 安装依赖
 pip install torch torchvision matplotlib
 
-# 训练全部三种模型
+# 训练全部三种模型（GPU 约 25 分钟）
 python train.py --model all
 
-# 或单独训练
-python train.py --model mlp
-python train.py --model cnn
-python train.py --model vit
-
-# 在 CPU 上训练（如果无 GPU）
-python train.py --model all --device cpu
-
-# 可视化对比结果
+# 生成对比图表
 python plot_results.py
+
+# 生成"训练的作用"可视化（直观感受训练效果）
+python visualize_training_effect.py   # 预测对比 + 卷积核
+python visualize_featuremaps.py       # 特征图：同一张图在训练前后的卷积输出
 ```
 
 ## 模型说明
 
 | 模型 | 特点 | 参数量 |
 |------|------|--------|
-| **MLP** | 三层全连接，展平图像为 3072 维向量，无空间结构感知 | ~3.4M |
-| **CNN** | 三层卷积 + 池化，有局部感受野和平移不变性 | ~3.7M |
-| **ViT** | 将图像切为 4×4 patch，用 6 层 Transformer 处理全局关系 | ~5.6M |
+| **MLP** | 三层全连接，展平图像为 3072 维向量，无空间结构感知 | ~3.8M |
+| **CNN** | 三层卷积 + 池化，有局部感受野和平移不变性 | ~3.2M |
+| **ViT** | 将图像切为 4×4 patch，用 6 层 Transformer 处理全局关系 | ~3.2M |
+
+（参数量由 `sum(p.numel() for p in model.parameters())` 实测得出。）
+
+## 实验结果
+
+> **训练环境**: RTX 4060 (WSL2), torch 2.11 + CUDA 13.0, batch_size 128, AdamW + CosineAnnealing
+
+| 模型 | 参数量 | 最佳准确率 | 训练耗时 | 分析 |
+|------|--------|:--:|:--:|------|
+| **MLP** | 3.81M | 58.34% | ~2 min | 架构天花板低——没有空间先验，展平像素丢失所有结构 |
+| **CNN** | 3.25M | **90.05%** 🏆 | ~2 min | 卷积的局部性 + 平移不变性 = 小数据上的强归纳偏置 |
+| **ViT** | 3.20M | 78.95% | ~22 min | 小注意力矩阵（65 tokens）GPU 并行度不足；50K 图喂不饱 Transformer |
+
+**核心发现**: 三个模型参数量几乎相同，CNN 领先 ViT 11 个百分点——**在小数据下，好的归纳偏置比完全自由的注意力机制更有效**。这与 ViT 论文的结论一致：ViT 需要大规模数据才能超越 CNN。
+
+## 可视化产出
+
+| 图表 | 内容 | 打开了什么直觉 |
+|------|------|---------------|
+| `results/accuracy_loss_comparison.png` | 三模型训练/测试的准确率 & 损失曲线 | 收敛速度差异、CNN 的过拟合拐点 |
+| `results/bar_comparison.png` | 最终准确率柱状图 | 一目了然的三模型排名 |
+| `results/training_effect_predictions.png` | 8 张图 × 3 模型 × (训练前/训练后) | **训练最直观的作用**: 从乱猜 → 全对 (CNN) |
+| `results/training_effect_kernels.png` | CNN 第一层卷积核(训练前 vs 训练后) | 训练把随机噪声雕刻成边缘/颜色检测器 |
+| `results/training_effect_featuremaps.png` | 同一张图经 Conv2d 后的特征图(上排随机/下排训练后) | **最直观**: 上排=红蓝乱码, 下排=清晰轮廓 🔴红=正激活 🔵蓝=负激活 ⬜白=不激活 |
 
 ## 实验目的
 
@@ -35,16 +57,18 @@ python plot_results.py
 2. **观察不同模型在相同数据上的收敛行为** — 训练/验证曲线、收敛速度
 3. **为具身智能中的视觉编码器选择提供直觉** — 不同任务和约束下适合什么架构
 
-## 输出
-
-- `checkpoints/` — 模型权重
-- `results/` — 训练历史 JSON + 对比图表 (PNG)
-  - `accuracy_loss_comparison.png` — 准确率和损失曲线
-  - `bar_comparison.png` — 最终准确率柱状图
-  - `params_vs_accuracy.png` — 参数量 vs 准确率
-
 ## 数据集
 
 CIFAR-10: 10 类，50,000 训练 + 10,000 测试，32×32 彩色图像
 
 小组后续会指定具体数据集，替换 `get_dataloaders()` 中的数据集加载逻辑即可。
+
+## 如何直观感受"训练的作用"
+
+三张图从浅到深：
+
+1. **预测对比图**（最直观）：看模型对同一张图，训练前乱猜 vs 训练后答对——这是训练最表层的作用
+2. **特征图**（中层）：看同一张图经过卷积层后"变成什么样"——训练前是噪声，训练后是清晰的边缘和纹理
+3. **卷积核**（底层）：看 3×3 的权重矩阵——训练把随机数变成了有方向的图案（边缘检测器、颜色偏好）
+
+三层合起来就是深度学习的核心直觉：**训练 = 梯度通过数万次反向传播，把随机参数雕刻成有意义的特征提取器**。
