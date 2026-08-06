@@ -44,11 +44,16 @@ pip install -e .
 
 ```powershell
 cd ..\MoLe-VLA-Pytorch
-pip install -e . --no-deps
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml tqdm tensorboard
+
+# ① 关键：prismatic_new 复制为 prismatic（代码 import 的是 prismatic，仓库只带 prismatic_new）
+xcopy /E /I prismatic_new prismatic
+
+# ② 直接装依赖（仓库无 setup 文件，是纯源码运行，不要 pip install -e .）
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple transformers==4.40.1 sentencepiece==0.1.99 timm==0.9.10 tokenizers==0.19.1 peft==0.11.1 accelerate draccus einops json-numpy jsonlines rich protobuf wandb
 ```
 
-> `--no-deps` 防止覆盖已装好的 torch。仓库自带 `environment.yml` 可参考。
+> ⚠️ `transformers==4.40.1` 是硬 pin（代码依赖其 API），不要升级
+> tensorflow 2.15 仅训练/RLBench 数据需要，推理可跳过
 
 ✅ 验证：`python -c "from vla import load_vla; print('VLA import OK')"`
 
