@@ -1,29 +1,40 @@
-# Phase 5 操作手册（WSL2 + RTX 5880 Ada 48GB）
+# Phase 5 操作手册（路线 A：SmolVLA 小规模 VLA × LIBERO 训练推理）
 
-> 目标：CogACT（MoLe-VLA backbone）在 LIBERO 仿真上推理 + 产出视频
-> 总耗时预算：3 小时（权重下载 30GB 是最大项，**到馆先启动**）
+> 任务要求：复现**小规模 VLA 模型**，在论文未使用的仿真环境（LIBERO）完成**训练+推理**，产出视频
+> 方案：**SmolVLA 0.5B**（LeRobot 官方小规模 VLA）+ **LIBERO**（robosuite 仿真）+ **LoRA 微调**
+> 硬件：图书馆机器 WSL2 + RTX 5880 Ada 48GB（本地实测同版本环境可跑）
+> 时间预算：3 小时
 
-## ⏱️ 执行顺序总览
+## 为什么是 SmolVLA
 
-| 步骤 | 内容 | 耗时 | 验证 |
-|------|------|:--:|------|
-| 0 | WSL2 GPU 验证 | 1 分钟 | `nvidia-smi` |
-| 1 | 拉代码 + Miniconda | 10 分钟 | `conda --version` |
-| 2 | 系统依赖（OSMesa 渲染） | 5 分钟 | `dpkg -l libosmesa6` |
-| 3 | 官方环境 + 依赖 | 20 分钟 | `from vla import load_vla` |
-| 4 | LIBERO 安装 | 10 分钟 | `from libero.libero import benchmark` |
-| **5** | **权重下载 30GB（后台）** | **40-60 分钟** | `ls ~/models/CogACT-Base/checkpoints/` |
-| 6 | 推理 + 录视频 | 15 分钟 | `output/` 出现 mp4 |
-| 7 | 回传 GitHub | 5 分钟 | git push |
+| 任务要求 | SmolVLA 满足 |
+|---------|:--:|
+| 小规模 VLA | ✅ 0.5B（单卡可训练） |
+| 训练+推理 | ✅ LoRA 微调 + 评估 |
+| 论文未用环境（LIBERO） | ✅ 论文（MoLe-VLA）只用 RLBench |
+| 视频交付 | ✅ eval 自动录制 |
+
+> MoLe-VLA 本体是 7B（论文架构），本路线以"小规模 VLA 的训练-仿真交互闭环"为目标，与小组任务字面要求对齐。
+
+## ⏱️ 执行顺序
+
+| 步骤 | 内容 | 耗时 |
+|------|------|:--:|
+| 0 | WSL2 GPU 验证 | 1 分钟 |
+| 1 | clone + Miniconda | 10 分钟 |
+| 2 | 环境：LeRobot 0.6.1 + extras | 20 分钟 |
+| 3 | 下载数据集 | 10 分钟 |
+| 4 | **测速 + 训练（LoRA）** | 1.5-2 小时 |
+| 5 | 评估 + 视频 | 20 分钟 |
+| 6 | 回传 GitHub | 5 分钟 |
 
 ## 第 0 步：WSL2 GPU 验证
 
 ```bash
-nvidia-smi
-# 应显示 RTX 5880 Ada
+nvidia-smi   # 应显示 RTX 5880 Ada
 ```
 
-## 第 1 步：拉代码 + Miniconda
+## 第 1 步：clone + Miniconda
 
 ```bash
 cd ~
@@ -33,109 +44,82 @@ cd embodied-intelligence-learning
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
 source $HOME/miniconda3/bin/activate
-conda --version   # ✅ 验证
 ```
 
-## 第 2 步：系统依赖（LIBERO 渲染必需，本地实证过）
+## 第 2 步：环境（LeRobot 0.6.1 + smolvla/libero/peft）
 
 ```bash
-sudo apt update
-sudo apt install -y libosmesa6-dev libegl1 libgl1 libgl1-mesa-dev libglib2.0-0
-```
+# 独立环境（避免与 MoLe-VLA 的 transformers 4.40 冲突）
+conda create -n smolvla python=3.10 -y
+conda activate smolvla
 
-> LIBERO 的 OffScreenRenderEnv 用 mujoco 离屏渲染，**EGL 和 OSMesa 库都必需**（缺 libegl1 会报 `EGLError`）。本地实证确认：缺库时环境创建/reset 正常，但渲染崩溃。
+# ① 先装 GPU torch（cu130，与本地实测环境一致：torch 2.13 + cu130 + lerobot 0.6.1 已验证）
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
-## 第 3 步：官方环境 + 依赖
-
-```bash
-cd phase5-vla-reproduction/code/MoLe-VLA-Pytorch
-
-# ① prismatic 复制（代码 import prismatic.*，官方结构）
-cp -r prismatic_new prismatic
-
-# ② 创建环境
-conda create -n cogact python=3.10 -y
-conda activate cogact
-
-# ③ 官方依赖清单（Linux 完整版，含 tensorflow/tfds）
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r ../../requirements_linux.txt
-
-# ④ dlimp（不在 PyPI）
-pip install "git+https://ghfast.top/https://github.com/kvablack/dlimp.git"
-
-# ⑤ torch GPU 版（官方 pin 2.5.1 + cu121）
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+# ② LeRobot 0.6.1 + SmolVLA/LIBERO/LoRA 支持（自动装 hf-libero，无需手动 clone LIBERO）
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[smolvla,libero,peft]"
 ```
 
 ✅ 验证：
 
 ```bash
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-# 期望: 2.5.1+cu121 True
-
-python -c "from vla import load_vla; print('VLA import OK')"
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # True
+python -c "from lerobot.envs.configs import EnvConfig; EnvConfig.get_choice_class('libero'); print('libero env OK')"
+python -c "from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig; print('smolvla OK')"
 ```
 
-## 第 4 步：LIBERO 安装
-
-```bash
-cd ~/embodied-intelligence-learning/phase5-vla-reproduction/code
-git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git
-cd LIBERO
-pip install -e .
-```
-
-✅ 验证：
-
-```bash
-python -c "from libero.libero import benchmark; from libero.libero.envs import OffScreenRenderEnv, RobosuiteEnv; print('LIBERO OK')"
-# 首次运行会问数据集路径 → 输入 n（用默认）
-```
-
-## 第 5 步：权重下载（⚠️ 到馆第一件事，后台跑）
+## 第 3 步：下载数据集
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
-huggingface-cli download CogACT/CogACT-Base --local-dir ~/models/CogACT-Base
+huggingface-cli download lerobot/libero_10 --repo-type dataset --local-dir data/libero_10
 ```
 
-✅ 验证（目录结构必须是这样）：
+> `lerobot/libero_10`：379 episodes、10 个任务、panda（实测元数据）。
+> 也可用更大的 `HuggingFaceVLA/libero`（1693 episodes，含多子集）。
+
+✅ 验证：`ls data/libero_10/meta/info.json`
+
+## 第 4 步：训练（LoRA 微调 SmolVLA）
 
 ```bash
-ls ~/models/CogACT-Base/
-# 必须包含: config.json  dataset_statistics.json  checkpoints/
-ls ~/models/CogACT-Base/checkpoints/
-# 必须包含: CogACT-Base.pt   ← 推理脚本 --ckpt 指向这个文件
+# ① 先测速：跑 500 步，看 step/s，估算总时长
+lerobot-train \
+  --policy.path lerobot/smolvla_base \
+  --env.type libero --env.task libero_10 \
+  --dataset.repo_id lerobot/libero_10 --dataset.root ./data \
+  --output_dir ./outputs/train/smolvla_libero \
+  --steps 500 --batch_size 4 --num_workers 4 \
+  --peft.method_type LORA --peft.r 64 --peft.lora_alpha 64 \
+  --policy.optimizer_lr 1e-3 \
+  --policy.push_to_hub false \
+  --save_freq 1000
+
+# ② 看输出里的 step/s，按剩余时间定 steps（例：2 step/s → 1.5 小时 ≈ 10000 步）
+#    正式训练（改 steps 后重跑；output_dir 换新名或加 --resume true）
 ```
 
-> ⚠️ **`--ckpt` 传的是 .pt 文件路径**（不是目录）——`load_vla` 要求父目录叫 `checkpoints`，同级有 `config.json` 和 `dataset_statistics.json`
+✅ 验证：`outputs/train/smolvla_libero/checkpoints/` 出现 checkpoint
 
-## 第 6 步：推理 + 录视频
+## 第 5 步：评估 + 录制视频
 
 ```bash
-cd ~/embodied-intelligence-learning/phase5-vla-reproduction/code
-python lib_libero_eval.py --ckpt ~/models/CogACT-Base/checkpoints/CogACT-Base.pt \
-  --action-model DiT-B --benchmark libero_spatial --task-idx 0 --num-episodes 5
+lerobot-eval \
+  --policy.path ./outputs/train/smolvla_libero/checkpoints/last/pretrained_model \
+  --env.type libero --env.task libero_10 \
+  --eval.n_episodes 10 \
+  --eval.use_async_envs false \
+  --eval.recording true
 ```
 
-✅ 验证：`phase5-vla-reproduction/output/` 出现 `libero_spatial_task0_ep*.mp4`
+✅ 验证：`outputs/eval/.../videos/` 出现 mp4
 
-### 动作尺度调参（机器人不动/乱动时）
-
-| 现象 | 调整 |
-|------|------|
-| 完全不动（动作太小） | `--action-scale 1.0` 或 `2.0` |
-| 乱飞/抖动（动作太大） | `--action-scale 0.2` 或 `0.1` |
-| 换策略配置 | `--policy-setup widowx_bridge` |
-
-> 零样本成功率预期 10-30%（CogACT 没训过 LIBERO，动作尺度/频率不匹配）——**视频能出即跑通**，报告如实说明
-
-## 第 7 步：回传结果
+## 第 6 步：回传
 
 ```bash
 cd ~/embodied-intelligence-learning
 git add phase5-vla-reproduction/output/
-git commit -m "Phase 5: LIBERO 推理视频"
+git commit -m "Phase 5: SmolVLA × LIBERO 推理视频"
 git push
 ```
 
@@ -143,9 +127,13 @@ git push
 
 | 问题 | 解决 |
 |------|------|
-| `import vla` 报错 | 确认第 3 步 ①② 执行（prismatic 复制 + 官方依赖） |
-| LIBERO 渲染黑屏/失败 | 第 2 步 OSMesa 未装；或换 `RobosuiteEnv`（脚本自动 fallback） |
-| 显存不足 | 48GB 足够 7B bf16；仍 OOM 换 `--action-model DiT-S` |
-| 权重下载慢 | 已用 hf-mirror；再慢用 `aria2c -x16` 多线程 |
-| 推理很慢（>5s/步） | 正常（7B VLA），每 episode 约 2 分钟 |
-| 报 `Missing config.json` | `--ckpt` 必须指向 `checkpoints/xxx.pt`，且 config.json 在同级 |
+| `import hf_libero` 或 libero 报错 | 确认装了 `lerobot[libero]`（含 hf-libero 0.1.4） |
+| 训练 OOM | batch_size 4 → 2；或 `--peft.r 32` |
+| 评估时环境创建失败 | WSL2 需 `sudo apt install -y libosmesa6-dev libegl1 libgl1`（本地实证：缺库渲染崩） |
+| 首次运行 LIBERO 交互提问 | 输 n（默认路径）；或预建 `~/.libero/config.yaml` |
+| 训练太慢 | 减小 steps；用 libero_10 单任务；`--num_workers 8` |
+| 成功率低 | 正常（短训），任务要求是跑通训练-推理链路 + 视频 |
+
+## 备用路线（CogACT 7B 推理，已实证 API）
+
+`code/lib_libero_eval.py` 保留（CogACT 7B 零样本推理，权重 30GB 需下载）。仅当 SmolVLA 训练失败时启用。
