@@ -59,7 +59,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 # ② LeRobot + SmolVLA/LIBERO/LoRA 支持（自动装 hf-libero）
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[smolvla,libero,peft]"
 
-# ③ ffmpeg（评估录视频必需，实测缺失——训练能跑但 eval 录像会失败）
+# ③ ffmpeg（训练必需！实测缺失时 lerobot-train 直接报错，不只是评估）
 conda install -c conda-forge ffmpeg -y
 ```
 
