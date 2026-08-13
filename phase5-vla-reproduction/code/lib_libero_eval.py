@@ -67,11 +67,26 @@ def make_libero_env(benchmark_name: str, task_idx: int, use_offscreen: bool = Tr
 
 
 def render_frame(env, camera_name="agentview", height=256, width=256):
-    """从 LIBERO 渲染一帧（robosuite 接口）"""
-    try:
-        return env.sim.render(camera_name=camera_name, height=height, width=width)
-    except Exception:
-        return env.env.sim.render(camera_name=camera_name, height=height, width=width)
+    """从 LIBERO 渲染一帧（robosuite 接口，多级 fallback）"""
+    for e in (env, getattr(env, "env", None)):
+        if e is None:
+            continue
+        try:
+            return e.sim.render(camera_name=camera_name, height=height, width=width)
+        except Exception:
+            continue
+    return None
+
+
+def get_obs_image(obs):
+    """防御性取图像观测：探测常见 key，兜底找第一个 3 通道数组"""
+    for k in ("agentview_image", "agentview_rgb", "front_image", "rgb", "image"):
+        if k in obs and obs[k] is not None:
+            return np.asarray(obs[k])
+    for k, v in obs.items():
+        if isinstance(v, np.ndarray) and v.ndim == 3 and v.shape[-1] == 3:
+            return v
+    raise KeyError(f"找不到图像观测, 可用 keys: {list(obs.keys())}")
 
 
 def run_episode(env, task, policy, max_steps, action_scale):
@@ -84,9 +99,9 @@ def run_episode(env, task, policy, max_steps, action_scale):
     video_frames = []
 
     for step in range(max_steps):
-        # 1. 取观测图像（agentview 相机，CogACT 期望 224x224）
-        img = obs["agentview_image"]  # (H, W, 3) uint8
-        if img.shape[0] != 224:
+        # 1. 取观测图像（CogACT 期望 224x224）
+        img = get_obs_image(obs)
+        if img.shape[0] != 224 or img.shape[1] != 224:
             import cv2
             img = cv2.resize(img, (224, 224))
 
