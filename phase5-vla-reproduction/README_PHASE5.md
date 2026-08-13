@@ -36,14 +36,14 @@ source $HOME/miniconda3/bin/activate
 conda --version   # ✅ 验证
 ```
 
-## 第 2 步：系统依赖（LIBERO 渲染必需）
+## 第 2 步：系统依赖（LIBERO 渲染必需，本地实证过）
 
 ```bash
 sudo apt update
-sudo apt install -y libosmesa6-dev libgl1-mesa-dev libglib2.0-0
+sudo apt install -y libosmesa6-dev libegl1 libgl1 libgl1-mesa-dev libglib2.0-0
 ```
 
-> LIBERO 的 OffScreenRenderEnv 用 OSMesa 离屏渲染（无显示器环境必需）
+> LIBERO 的 OffScreenRenderEnv 用 mujoco 离屏渲染，**EGL 和 OSMesa 库都必需**（缺 libegl1 会报 `EGLError`）。本地实证确认：缺库时环境创建/reset 正常，但渲染崩溃。
 
 ## 第 3 步：官方环境 + 依赖
 
