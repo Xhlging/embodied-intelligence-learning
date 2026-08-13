@@ -49,20 +49,28 @@ def parse_args():
     return parser.parse_args()
 
 
-def make_libero_env(benchmark_name: str, task_idx: int, use_offscreen: bool = True):
-    """创建 LIBERO 环境。优先 OffScreenRenderEnv（无窗口），失败则回退 RobosuiteEnv。"""
+def make_libero_env(benchmark_name: str, task_idx: int):
+    """
+    创建 LIBERO 环境（API 已从 LIBERO 源码核实，见 README 第 6 步）。
+    - benchmark.get_benchmark(name)() -> bench
+    - bench.get_task(i) -> Task(NamedTuple: name, language, bddl_file, ...)
+    - bench.get_task_bddl_file_path(i) -> bddl 绝对路径
+    - OffScreenRenderEnv(bddl_file_name=..., camera_heights=128, camera_widths=128)
+    """
     from libero.libero import benchmark
-    from libero.libero.envs import OffScreenRenderEnv, RobosuiteEnv
+    from libero.libero.envs import OffScreenRenderEnv
 
     bench = benchmark.get_benchmark(benchmark_name)()
     task = bench.get_task(task_idx)
-    env_cls = OffScreenRenderEnv if use_offscreen else RobosuiteEnv
-    try:
-        env = env_cls(task)
-        print(f"[LIBERO] 环境创建成功: {env_cls.__name__} | 任务: {task.name}")
-    except Exception as e:
-        print(f"[LIBERO] {env_cls.__name__} 失败 ({e})，回退 RobosuiteEnv")
-        env = RobosuiteEnv(task)
+    bddl_file_path = bench.get_task_bddl_file_path(task_idx)
+
+    env_args = {
+        "bddl_file_name": bddl_file_path,
+        "camera_heights": 128,
+        "camera_widths": 128,
+    }
+    env = OffScreenRenderEnv(**env_args)
+    print(f"[LIBERO] 环境创建成功: OffScreenRenderEnv | 任务: {task.name}")
     return env, task
 
 
@@ -90,9 +98,10 @@ def get_obs_image(obs):
 
 
 def run_episode(env, task, policy, max_steps, action_scale):
-    """跑一个 episode，返回 (是否成功, 视频帧列表)"""
+    """跑一个 episode，返回 (是否成功, 视频帧列表)。
+    成功判定: LIBERO 的 done = _check_success()（源码核实，info 无 success key）"""
     obs = env.reset()
-    task_desc = task.language_instruction
+    task_desc = task.language  # Task NamedTuple 属性是 language（源码核实）
     print(f"  指令: {task_desc}")
 
     policy.reset(task_desc)
@@ -125,7 +134,7 @@ def run_episode(env, task, policy, max_steps, action_scale):
         if done:
             break
 
-    success = bool(info.get("success", False))
+    success = bool(done)  # LIBERO: done = _check_success()
     return success, video_frames
 
 
