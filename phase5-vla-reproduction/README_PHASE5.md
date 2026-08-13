@@ -46,18 +46,21 @@ bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
 source $HOME/miniconda3/bin/activate
 ```
 
-## 第 2 步：环境（LeRobot 0.6.1 + smolvla/libero/peft）
+## 第 2 步：环境（LeRobot + smolvla/libero/peft）
 
 ```bash
-# 独立环境（避免与 MoLe-VLA 的 transformers 4.40 冲突）
+# 独立环境
 conda create -n smolvla python=3.10 -y
 conda activate smolvla
 
-# ① 先装 GPU torch（cu130，与本地实测环境一致：torch 2.13 + cu130 + lerobot 0.6.1 已验证）
+# ① GPU torch
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
-# ② LeRobot 0.6.1 + SmolVLA/LIBERO/LoRA 支持（自动装 hf-libero，无需手动 clone LIBERO）
+# ② LeRobot + SmolVLA/LIBERO/LoRA 支持（自动装 hf-libero）
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[smolvla,libero,peft]"
+
+# ③ ffmpeg（评估录视频必需，实测缺失——训练能跑但 eval 录像会失败）
+conda install -c conda-forge ffmpeg -y
 ```
 
 ✅ 验证：
