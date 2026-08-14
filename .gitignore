@@ -35,7 +35,7 @@ Thumbs.db
 checkpoints/
 
 # Simulation outputs
-*.mp4
+# *.mp4  # Phase 5 推理视频需要入库，已注释
 *.gif
 *.log
 
