@@ -15,16 +15,26 @@
 |------|------|------|------|
 | 🏗️ Phase 1 | `phase1-robot-system/` | 认识机器人系统 — 阅读《Robotics: Modelling, Planning and Control》 | 🟢 已完成 |
 | 🧠 Phase 2 | `phase2-algorithm-basics/` | 算法基础 — 深度学习概念 + 论文阅读 + 模型对比实验 | 🟢 已完成 |
-| 📖 Phase 3 | `phase3-vla-survey/` | VLA 综述 — 综述论文阅读 + 介绍 PPT | 🔴 待开始 |
-| 🦾 Phase 4 | `phase4-act-reproduction/` | ACT 复现 — ACT 论文 + ALOHA + 仿真环境 | 🔴 待开始 |
-| 🧪 Phase 5 | `phase5-vla-reproduction/` | Mole-VLA 复现 — 在新仿真环境复现 VLA 模型 | 🔴 待开始 |
+| 📖 Phase 3 | `phase3-vla-survey/` | VLA 综述 — 综述论文阅读 + 介绍 PPT | 🟢 已完成（PPT 待补） |
+| 🦾 Phase 4 | `phase4-act-reproduction/` | ACT 复现 — ACT 论文 + ALOHA + 仿真环境 | 🟢 已完成 |
+| 🧪 Phase 5 | `phase5-vla-reproduction/` | 小规模 VLA 复现 — SmolVLA × LIBERO 训练推理 | 🟢 已完成 |
+
+## 阶段成果速览
+
+| 阶段 | 核心产出 |
+|------|---------|
+| Phase 1 | 机器人学教材笔记 + 4 问解答 |
+| Phase 2 | 3 篇论文笔记 + MLP/CNN/ViT 对比实验（58.3% / 90.1% / 79.0%） |
+| Phase 3 | VLA 综述（28 页）精读笔记 + 5 问解答 |
+| Phase 4 | ACT × gym-aloha：训练 20K 步、10 个推理视频、复现报告 |
+| Phase 5 | SmolVLA 0.5B × LIBERO：LoRA 微调 20K 步（loss 0.111）、20 个推理视频、完整报告 |
 
 ## 技术栈
 
 - **语言:** Python（主力）、C++（可能涉及）
-- **框架:** PyTorch
-- **仿真:** MuJoCo / Isaac Gym / LEBERO
-- **硬件:** ALOHA 机械臂
+- **框架:** PyTorch / LeRobot
+- **仿真:** MuJoCo（gym-aloha）/ LIBERO（robosuite）
+- **硬件:** ALOHA 机械臂 / RTX 4060 / RTX 5880 Ada
 
 ## 目录结构
 
